@@ -1,0 +1,397 @@
+<!doctype html>
+<!-- UI refinement guidance adapted from unslop by Damir Sokolovsky (CC BY 4.0): https://heydamir.design/unslop -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ef">
+  <title>픽셀 경계 크롭</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #141415;
+      --stage: #101112;
+      --surface: #19191b;
+      --raised: #232325;
+      --hairline: rgba(237, 237, 237, .10);
+      --text: #ededed;
+      --secondary: #a1a1a6;
+      --muted: #85858b;
+      --accent: #70c8e8;
+      --accent-ink: #11212a;
+      --good: #4cc38a;
+      font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .shell { width: 100%; height: 100vh; display: flex; flex-direction: column; }
+    @supports (height: 100dvh) { body,.shell { height: 100dvh; } }
+    .topbar { flex: 0 0 56px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
+    .brand { min-width: 0; display: flex; align-items: center; gap: 12px; }
+    .brand-name { max-width: min(48vw, 560px); overflow: hidden; color: var(--text); font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .icon-button { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--secondary); transition: background-color 140ms, color 140ms, border-color 140ms; }
+    .icon-button:hover { border-color: var(--hairline); background: var(--raised); color: var(--text); }
+    .icon-button svg,.button svg,.tool-mode svg { width: 18px; height: 18px; flex: 0 0 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--raised); color: var(--text); font-size: 13px; font-weight: 500; transition: background-color 140ms, border-color 140ms, color 140ms, transform 100ms; }
+    .button:hover:not(:disabled) { border-color: rgba(237,237,237,.20); background: #2b2b2d; }
+    .button:active:not(:disabled) { transform: scale(.98); }
+    .button:disabled { opacity: .45; cursor: not-allowed; }
+    .button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+    .button.primary:hover:not(:disabled) { border-color: #8bd6ef; background: #8bd6ef; }
+    .intro { flex: 0 0 48px; height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
+    .tool-mode { align-self: stretch; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 2px solid var(--accent); color: var(--text); font-size: 13px; font-weight: 500; }
+    .tool-mode svg { color: var(--secondary); }
+    .edge-meta { margin-left: auto; color: var(--secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .workspace { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) auto; }
+    .editor-card { min-height: 0; display: flex; flex-direction: column; background: var(--stage); }
+    .editor-head { display: none; }
+    .stage { position: relative; width: 100%; min-height: 0; flex: 1; display: grid; place-items: center; overflow: hidden; background: var(--stage); }
+    .empty-state { width: min(420px, calc(100% - 32px)); padding: 32px 24px; border: 1px dashed rgba(237,237,237,.22); border-radius: 16px; background: var(--surface); text-align: center; cursor: pointer; transition: border-color 140ms, background-color 140ms; }
+    .empty-state:hover,.stage.drag-over .empty-state { border-color: var(--accent); background: var(--raised); }
+    .upload-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 16px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--raised); color: var(--accent); }
+    .upload-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .empty-state strong { display: block; color: var(--text); font-size: 15px; font-weight: 500; }
+    .empty-state p { margin: 8px 0 16px; color: var(--secondary); font-size: 13px; line-height: 20px; }
+    .drop-hint { margin-top: 12px; color: var(--muted); font-size: 12px; }
+    .canvas-wrap { position: relative; display: none; line-height: 0; touch-action: none; }
+    #imageCanvas { display: block; max-width: none; cursor: crosshair; touch-action: none; }
+    .stage-help { position: absolute; right: 16px; bottom: 16px; display: none; max-width: calc(100% - 32px); padding: 8px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface); color: var(--secondary); font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none; }
+    .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(160px,.9fr) minmax(184px,1fr) minmax(184px,1fr) minmax(216px,1.15fr); align-items: center; gap: 8px 24px; border-top: 1px solid var(--hairline); background: var(--surface); }
+    .section { min-width: 0; }
+    .section-snap { grid-column: 1; }
+    .section-distance { grid-column: 2; }
+    .section-threshold { grid-column: 3; }
+    .section-selection { grid-column: 4; }
+    .toggle-row { display: flex; align-items: center; gap: 12px; }
+    .toggle-copy b { display: block; color: var(--text); font-size: 13px; font-weight: 500; }
+    .toggle-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 16px; }
+    .switch { appearance: none; width: 36px; height: 20px; flex: 0 0 36px; position: relative; margin: 0; border: 1px solid rgba(237,237,237,.12); border-radius: 12px; background: var(--raised); cursor: pointer; transition: background-color 140ms, border-color 140ms; }
+    .switch:before { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--secondary); transition: transform 140ms, background-color 140ms; }
+    .switch:checked { border-color: var(--accent); background: var(--accent); }
+    .switch:checked:before { background: var(--accent-ink); transform: translateX(16px); }
+    .section-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--secondary); font-size: 12px; font-weight: 500; }
+    .range-value { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .range-row { display: flex; align-items: center; gap: 8px; }
+    input[type="range"] { width: 100%; min-width: 0; height: 4px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+    .selection-box { display: flex; gap: 16px; margin-top: 4px; }
+    .metric { display: flex; align-items: baseline; gap: 8px; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    .metric strong { color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .status { min-width: 0; display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--secondary); font-size: 12px; line-height: 16px; }
+    .status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--muted); }
+    .status.ready .status-dot { background: var(--good); }
+    .status.warn .status-dot { background: #d6a25f; }
+    .footnote,.side-title { display: none; }
+    #fileInput { display: none; }
+    @media(max-width: 960px) {
+      .side-card { min-height: 176px; padding: 16px 20px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: 1fr 1fr; gap: 16px 24px; }
+      .section-snap { grid-column: 1; grid-row: 1; }
+      .section-distance { grid-column: 2; grid-row: 1; }
+      .section-threshold { grid-column: 1; grid-row: 2; }
+      .section-selection { grid-column: 2; grid-row: 2; }
+      .toggle-copy span { display: none; }
+    }
+    @media(max-width: 560px) {
+      .topbar { padding: 0 12px; gap: 8px; }
+      .brand { gap: 8px; }
+      .brand-name { max-width: 40vw; font-size: 13px; }
+      .top-actions { gap: 8px; }
+      .top-actions #clearButton { width: 36px; padding: 0; font-size: 0; }
+      .top-actions #clearButton svg { width: 18px; height: 18px; }
+      .top-actions #downloadButton { gap: 8px; padding: 0 12px; }
+      .top-actions #downloadButton .button-label { font-size: 12px; }
+      .intro { padding: 0 16px; }
+      .side-card { min-height: 192px; padding: 16px 12px; gap: 12px; }
+      .section-label { margin-bottom: 8px; }
+      .selection-box { gap: 12px; }
+      .metric { gap: 4px; }
+      .stage-help { right: 12px; bottom: 12px; max-width: calc(100% - 24px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <button class="icon-button" id="openButton" type="button" aria-label="이미지 열기" title="이미지 열기"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="m4 16 5-4 3.5 3 2.5-2 5 4"/><path d="M17 2.5v5M14.5 5h5"/></svg></button>
+        <div class="brand-name" id="topFileName">이미지 선택</div>
+      </div>
+      <div class="top-actions">
+        <button class="button" id="clearButton" type="button" disabled aria-label="크롭 영역 다시 설정"><svg viewBox="0 0 24 24"><path d="M4 7v5h5"/><path d="M5.5 12a7 7 0 1 0 2-5L4 12"/></svg><span class="button-label">다시 설정</span></button>
+        <button class="button primary" id="downloadButton" type="button" disabled><svg viewBox="0 0 24 24"><path d="M12 3.5v11M8 10.5l4 4 4-4M4.5 17v3h15v-3"/></svg><span class="button-label">PNG 저장</span></button>
+      </div>
+    </header>
+    <section class="intro">
+      <div class="tool-mode" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M4 4l6 6M20 4l-6 6M4 20l6-6M20 20l-6-6"/></svg><span>자르기</span></div>
+      <span id="edgeMeta" class="edge-meta">감지 대기</span>
+    </section>
+    <section class="workspace" aria-label="이미지 크롭 작업 공간">
+      <div class="editor-card">
+        <div class="stage" id="stage">
+          <div class="empty-state" id="emptyState" role="button" tabindex="0" aria-label="이미지 선택 또는 드래그 앤 드롭">
+            <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg></div>
+            <strong>색 경계에 맞춰 자르기</strong>
+            <p>이미지를 선택하면 크롭 프레임과 직선 경계를 표시합니다</p>
+            <span class="button">이미지 선택</span>
+            <div class="drop-hint">PNG · JPG · WEBP</div>
+          </div>
+          <div class="canvas-wrap" id="canvasWrap"><canvas id="imageCanvas" aria-label="크롭 영역을 드래그하여 선택하세요"></canvas></div>
+          <div class="stage-help" id="stageHelp">프레임 안을 드래그해 이동 · 모서리와 변을 드래그해 조절</div>
+        </div>
+      </div>
+      <aside class="side-card">
+        <div class="section section-snap">
+          <div class="toggle-row"><div class="toggle-copy"><b>경계 스냅</b><span>가까운 픽셀 경계에 맞춤</span></div><input class="switch" id="snapToggle" type="checkbox" checked aria-label="경계에 스냅 사용"></div>
+        </div>
+        <div class="section section-distance">
+          <div class="section-label"><label for="snapRange">스냅 거리</label><span class="range-value" id="snapRangeValue">24 px</span></div>
+          <div class="range-row"><input id="snapRange" type="range" min="4" max="96" value="24"></div>
+        </div>
+        <div class="section section-threshold">
+          <div class="section-label"><label for="lineThreshold">경계 최소 길이</label><span class="range-value" id="lineThresholdValue">25%</span></div>
+          <div class="range-row"><input id="lineThreshold" type="range" min="10" max="70" value="25"></div>
+        </div>
+        <div class="section section-selection">
+          <div class="section-label">크롭 영역</div>
+          <div class="selection-box"><div class="metric"><span>가로</span><strong id="widthValue">—</strong></div><div class="metric"><span>세로</span><strong id="heightValue">—</strong></div></div>
+          <div class="status" id="statusLine"><i class="status-dot"></i><span>이미지의 직선 색 경계를 감지합니다</span></div>
+        </div>
+      </aside>
+    </section>
+    <input id="fileInput" type="file" accept="image/*">
+  </main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('imageCanvas'), ctx = canvas.getContext('2d');
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+  const stage = $('stage'), wrap = $('canvasWrap'), empty = $('emptyState');
+  const state = { image: null, name: '', selection: null, edgesX: [], edgesY: [], scale: 1, action: null, edgeData: null };
+  const fileInput = $('fileInput');
+  const fmt = n => Math.round(n).toLocaleString('ko-KR');
+
+  function setStatus(text, kind='') {
+    const box = $('statusLine'); box.className = `status ${kind}`; box.querySelector('span').textContent = text;
+  }
+  function setSelection(rect) {
+    if (!rect || rect.r-rect.l < 2 || rect.b-rect.t < 2) state.selection = null;
+    else {
+      const w = canvas.width, h = canvas.height;
+      state.selection = { l: Math.max(0, Math.min(w, rect.l)), t: Math.max(0, Math.min(h, rect.t)), r: Math.max(0, Math.min(w, rect.r)), b: Math.max(0, Math.min(h, rect.b)) };
+    }
+    updateSelectionInfo(); draw();
+  }
+  function updateSelectionInfo() {
+    const s = state.selection;
+    $('widthValue').textContent = s ? `${fmt(s.r-s.l)} px` : '—';
+    $('heightValue').textContent = s ? `${fmt(s.b-s.t)} px` : '—';
+    $('downloadButton').disabled = !s;
+    $('clearButton').disabled = !state.image;
+  }
+  function renderCanvas() {
+    if (!state.image) return;
+    const w = state.image.naturalWidth, h = state.image.naturalHeight;
+    const rect = stage.getBoundingClientRect();
+    const maxW = Math.max(160, rect.width - 32), maxH = Math.max(160, rect.height - 32);
+    state.scale = Math.min(maxW / w, maxH / h, 1);
+    wrap.style.width = `${w * state.scale}px`; wrap.style.height = `${h * state.scale}px`;
+    canvas.style.width = `${w * state.scale}px`; canvas.style.height = `${h * state.scale}px`;
+    draw();
+  }
+  function draw() {
+    if (!state.image) return;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h); ctx.drawImage(state.image,0,0,w,h);
+    const s = state.selection;
+    if (s) {
+      const sw=s.r-s.l, sh=s.b-s.t, u=1/state.scale;
+      ctx.save(); ctx.fillStyle = 'rgba(12,13,12,.56)'; ctx.fillRect(0,0,w,h); ctx.clearRect(s.l,s.t,sw,sh); ctx.drawImage(state.image,s.l,s.t,sw,sh,s.l,s.t,sw,sh);
+      ctx.strokeStyle='rgba(255,255,255,.46)';ctx.lineWidth=Math.max(.7,u*.7);
+      ctx.beginPath();
+      for(let i=1;i<=2;i++){const gx=s.l+sw*i/3,gy=s.t+sh*i/3;ctx.moveTo(gx,s.t);ctx.lineTo(gx,s.b);ctx.moveTo(s.l,gy);ctx.lineTo(s.r,gy);}
+      ctx.stroke();
+      ctx.strokeStyle='#f5f6f3';ctx.lineWidth=Math.max(1.2,u*1.35);ctx.setLineDash([]);ctx.strokeRect(s.l,s.t,sw,sh);
+      const aligned=(position,lines)=>lines.some(edge=>edge.score>=.30&&Math.abs(edge.p-position)<=1);
+      ctx.strokeStyle='#70c8e8';ctx.lineWidth=Math.max(2,u*2.5);ctx.lineCap='square';ctx.beginPath();
+      const mark=Math.min(12*u,sw/10,sh/10);
+      if(aligned(s.l,state.edgesX)){const y=s.t+sh*.28;ctx.moveTo(s.l,y-mark/2);ctx.lineTo(s.l,y+mark/2);}
+      if(aligned(s.r,state.edgesX)){const y=s.t+sh*.72;ctx.moveTo(s.r,y-mark/2);ctx.lineTo(s.r,y+mark/2);}
+      if(aligned(s.t,state.edgesY)){const x=s.l+sw*.28;ctx.moveTo(x-mark/2,s.t);ctx.lineTo(x+mark/2,s.t);}
+      if(aligned(s.b,state.edgesY)){const x=s.l+sw*.72;ctx.moveTo(x-mark/2,s.b);ctx.lineTo(x+mark/2,s.b);}
+      ctx.stroke();
+      const arm=Math.min(20*u,sw/4,sh/4), inset=1*u;
+      ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(2,u*2.4);ctx.lineCap='square';ctx.beginPath();
+      ctx.moveTo(s.l+inset,s.t+arm);ctx.lineTo(s.l+inset,s.t+inset);ctx.lineTo(s.l+arm,s.t+inset);
+      ctx.moveTo(s.r-arm,s.t+inset);ctx.lineTo(s.r-inset,s.t+inset);ctx.lineTo(s.r-inset,s.t+arm);
+      ctx.moveTo(s.l+inset,s.b-arm);ctx.lineTo(s.l+inset,s.b-inset);ctx.lineTo(s.l+arm,s.b-inset);
+      ctx.moveTo(s.r-arm,s.b-inset);ctx.lineTo(s.r-inset,s.b-inset);ctx.lineTo(s.r-inset,s.b-arm);ctx.stroke();
+      ctx.fillStyle='#f5f6f3';
+      const gripW=20*u,gripH=4*u;
+      [[(s.l+s.r)/2-gripW/2,s.t+inset],[(s.l+s.r)/2-gripW/2,s.b-gripH-inset],[s.l+inset,(s.t+s.b)/2-gripW/2,gripH,gripW],[s.r-gripH-inset,(s.t+s.b)/2-gripW/2,gripH,gripW]].forEach((g,i)=>{
+        if(i<2)ctx.fillRect(g[0],g[1],gripW,gripH);else ctx.fillRect(g[0],g[1],g[2],g[3]);
+      });
+      ctx.restore();
+    }
+  }
+  function detectEdges() {
+    if (!state.image) return;
+    const { width:w,height:h } = canvas;
+    scanCanvas.width=w; scanCanvas.height=h;
+    scanCtx.drawImage(state.image,0,0,w,h);
+    const data = scanCtx.getImageData(0,0,w,h).data;
+    const minimumCoverage = Number($('lineThreshold').value) / 100;
+    const lineDiff = 52;
+    const sampleY = Math.max(1, Math.floor(h/900)), sampleX = Math.max(1, Math.floor(w/900));
+    function rgbDiff(i,j) { const dr=data[i]-data[j], dg=data[i+1]-data[j+1], db=data[i+2]-data[j+2]; return Math.sqrt(dr*dr+dg*dg+db*db); }
+    function scanVertical() {
+      const scores = new Float32Array(w);
+      const coverageAt = new Float32Array(w);
+      for(let x=1;x<w-1;x++) {
+        let changed=0,total=0,sum=0;
+        for(let y=0;y<h;y+=sampleY) { const i=(y*w+x)*4, d=rgbDiff(i,i-4);sum+=d;if(d>=lineDiff)changed++;total++; }
+        const coverage=changed/total, mean=sum/total;
+        coverageAt[x]=coverage;
+        scores[x]=coverage*.75+Math.min(mean/210,1)*.25;
+      }
+      return pickPeaks(scores, coverageAt, minimumCoverage, Math.max(5,Math.round(w*.0015)));
+    }
+    function scanHorizontal() {
+      const scores = new Float32Array(h);
+      const coverageAt = new Float32Array(h);
+      for(let y=1;y<h-1;y++) {
+        let changed=0,total=0,sum=0;
+        const row=y*w*4, prev=row-w*4;
+        for(let x=0;x<w;x+=sampleX) { const i=row+x*4, d=rgbDiff(i,prev+x*4);sum+=d;if(d>=lineDiff)changed++;total++; }
+        const coverage=changed/total, mean=sum/total;
+        coverageAt[y]=coverage;
+        scores[y]=coverage*.75+Math.min(mean/210,1)*.25;
+      }
+      return pickPeaks(scores, coverageAt, minimumCoverage, Math.max(5,Math.round(h*.0015)));
+    }
+    function pickPeaks(scores, coverageAt, minimumCoverage, separation) {
+      const candidates=[];
+      for(let i=2;i<scores.length-2;i++) {
+        if(coverageAt[i]<minimumCoverage || scores[i]<.16) continue;
+        let peak=true;
+        for(let d=1;d<=3;d++) if(scores[i-d]>scores[i] || scores[i+d]>scores[i]) { peak=false;break; }
+        if(peak) candidates.push({p:i,score:scores[i]});
+      }
+      candidates.sort((a,b)=>b.score-a.score);
+      const chosen=[];
+      for(const c of candidates) { if(chosen.every(v=>Math.abs(v.p-c.p)>=separation)) chosen.push(c); if(chosen.length>=120)break; }
+      return chosen.sort((a,b)=>a.p-b.p);
+    }
+    state.edgesX=scanVertical(); state.edgesY=scanHorizontal();
+    $('edgeMeta').textContent=`경계 ${state.edgesX.length+state.edgesY.length}개 감지`;
+    const strongX=state.edgesX.filter(e=>e.score>=.38).length, strongY=state.edgesY.filter(e=>e.score>=.38).length;
+    state.edgeData={strongX,strongY};
+    setStatus(`세로 ${strongX}개 · 가로 ${strongY}개 경계`, 'ready');
+    draw();
+  }
+  function nearest(value, lines) {
+    if (!state.edgeData || !lines.length) return value;
+    const max=Number($('snapRange').value);
+    let best=null, dist=Infinity;
+    for(const e of lines) {
+      if(e.score<.30) continue;
+      const d=Math.abs(e.p-value);
+      if(d<=max && d<dist) { best=e.p; dist=d; }
+    }
+    return best === null ? value : best;
+  }
+  function snapPoint(x,y) { if (!$('snapToggle').checked) return {x,y};return {x:nearest(x,state.edgesX),y:nearest(y,state.edgesY)}; }
+  function pointerPoint(ev) {
+    const r=canvas.getBoundingClientRect();
+    return {x:Math.max(0,Math.min(canvas.width,(ev.clientX-r.left)*canvas.width/r.width)),y:Math.max(0,Math.min(canvas.height,(ev.clientY-r.top)*canvas.height/r.height))};
+  }
+  function getHandle(p,s) {
+    const radius=16/state.scale;
+    const handles=[['nw',s.l,s.t],['ne',s.r,s.t],['sw',s.l,s.b],['se',s.r,s.b]];
+    for(const [name,x,y] of handles) if(Math.hypot(p.x-x,p.y-y)<=radius)return name;
+    const mx=(s.l+s.r)/2,my=(s.t+s.b)/2;
+    if(Math.abs(p.y-s.t)<=radius && Math.abs(p.x-mx)<=radius*1.5)return 'n';
+    if(Math.abs(p.y-s.b)<=radius && Math.abs(p.x-mx)<=radius*1.5)return 's';
+    if(Math.abs(p.x-s.l)<=radius && Math.abs(p.y-my)<=radius*1.5)return 'w';
+    if(Math.abs(p.x-s.r)<=radius && Math.abs(p.y-my)<=radius*1.5)return 'e';
+    if(p.x>=s.l && p.x<=s.r && p.y>=s.t && p.y<=s.b)return 'move';
+    return null;
+  }
+  canvas.addEventListener('pointerdown', ev => {
+    if(!state.image)return;
+    const p=pointerPoint(ev), s=state.selection;
+    let type='create', handle=null;
+    if(s) { handle=getHandle(p,s); if(handle)type=handle==='move'?'move':'resize'; }
+    let start=p;
+    if(type==='create') start=snapPoint(p.x,p.y);
+    state.action={type,handle,start,original:s?{...s}:null};
+    canvas.setPointerCapture(ev.pointerId); ev.preventDefault();
+    if(type==='create')setSelection({l:start.x,t:start.y,r:start.x+3,b:start.y+3});
+  });
+  canvas.addEventListener('pointermove', ev => {
+    if(!state.image)return;
+    const p=pointerPoint(ev), s=state.selection, a=state.action;
+    if(!a) { const hit=s?getHandle(p,s):null;canvas.style.cursor=hit==='move'?'move':hit==='n'||hit==='s'?'ns-resize':hit==='e'||hit==='w'?'ew-resize':hit==='ne'||hit==='sw'?'nesw-resize':hit?'nwse-resize':'crosshair'; return; }
+    const q=snapPoint(p.x,p.y);
+    if(a.type==='create') setSelection({l:Math.min(a.start.x,q.x),t:Math.min(a.start.y,q.y),r:Math.max(a.start.x,q.x),b:Math.max(a.start.y,q.y)});
+    else if(a.type==='move' && a.original) {
+      const o=a.original, dx=p.x-a.start.x,dy=p.y-a.start.y; let l=o.l+dx,t=o.t+dy;
+      const sx=nearest(l,state.edgesX), sr=nearest(l+(o.r-o.l),state.edgesX); if($('snapToggle').checked){ if(sx!==l)l=sx;else if(sr!==l+(o.r-o.l))l=sr-(o.r-o.l); }
+      const sy=nearest(t,state.edgesY), sb=nearest(t+(o.b-o.t),state.edgesY); if($('snapToggle').checked){ if(sy!==t)t=sy;else if(sb!==t+(o.b-o.t))t=sb-(o.b-o.t); }
+      l=Math.max(0,Math.min(canvas.width-(o.r-o.l),l));t=Math.max(0,Math.min(canvas.height-(o.b-o.t),t));
+      setSelection({l,t,r:l+(o.r-o.l),b:t+(o.b-o.t)});
+    } else if(a.type==='resize' && a.original) {
+      const o=a.original, r={...o}, h=a.handle;
+      if(h.includes('w'))r.l=Math.max(0,Math.min(o.r-4,q.x)); else if(h.includes('e'))r.r=Math.min(canvas.width,Math.max(o.l+4,q.x));
+      if(h.includes('n'))r.t=Math.max(0,Math.min(o.b-4,q.y)); else if(h.includes('s'))r.b=Math.min(canvas.height,Math.max(o.t+4,q.y));
+      setSelection(r);
+    }
+  });
+  function endPointer(ev) { if(state.action){ state.action=null; try{canvas.releasePointerCapture(ev.pointerId);}catch{} } }
+  canvas.addEventListener('pointerup',endPointer); canvas.addEventListener('pointercancel',endPointer);
+
+  function loadFile(file) {
+    if(!file || !file.type.startsWith('image/')) { setStatus('이미지 파일을 선택하세요','warn'); return; }
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{
+      if(state.image && state.image.src.startsWith('blob:')) URL.revokeObjectURL(state.image.src);
+      state.image=img;state.name=file.name;state.selection=null;
+      canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+      state.selection={l:0,t:0,r:canvas.width,b:canvas.height};
+      empty.style.display='none';wrap.style.display='block';$('stageHelp').style.display='block';
+      $('topFileName').textContent=file.name;
+      renderCanvas();detectEdges();updateSelectionInfo();
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);setStatus('이미지를 열 수 없습니다 · 다른 파일을 선택하세요','warn');};
+    img.src=url;
+  }
+  function downloadCrop() {
+    const s=state.selection;if(!state.image||!s)return;
+    const out=document.createElement('canvas');out.width=Math.round(s.r-s.l);out.height=Math.round(s.b-s.t);
+    out.getContext('2d').drawImage(state.image,s.l,s.t,out.width,out.height,0,0,out.width,out.height);
+    out.toBlob(blob=>{ if(!blob)return;const link=document.createElement('a');link.href=URL.createObjectURL(blob);const base=state.name.replace(/\.[^.]+$/,'')||'image';link.download=`${base}-crop.png`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000); },'image/png');
+  }
+  $('openButton').addEventListener('click',()=>fileInput.click());
+  empty.addEventListener('click',()=>fileInput.click()); empty.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}});
+  fileInput.addEventListener('change',e=>{loadFile(e.target.files[0]);fileInput.value='';});
+  $('downloadButton').addEventListener('click',downloadCrop);
+  $('clearButton').addEventListener('click',()=>{if(state.image)setSelection({l:0,t:0,r:canvas.width,b:canvas.height});});
+  $('snapRange').addEventListener('input',e=>$('snapRangeValue').textContent=`${e.target.value} px`);
+  $('lineThreshold').addEventListener('input',e=>{$('lineThresholdValue').textContent=`${e.target.value}%`;});
+  $('lineThreshold').addEventListener('change',()=>{detectEdges();});
+  window.addEventListener('resize',renderCanvas);
+  stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drag-over');});
+  stage.addEventListener('dragleave',e=>{if(!stage.contains(e.relatedTarget))stage.classList.remove('drag-over');});
+  stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drag-over');loadFile(e.dataTransfer.files[0]);});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.image)setSelection({l:0,t:0,r:canvas.width,b:canvas.height});});
+  updateSelectionInfo();
+})();
+</script>
+</body>
+</html>
+

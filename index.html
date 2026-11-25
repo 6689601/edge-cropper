@@ -59,7 +59,6 @@
     .drop-hint { margin-top: 12px; color: var(--muted); font-size: 12px; }
     .canvas-wrap { position: relative; display: none; line-height: 0; touch-action: none; }
     #imageCanvas { display: block; max-width: none; cursor: crosshair; touch-action: none; }
-    .stage-help { position: absolute; right: 16px; bottom: 16px; display: none; max-width: calc(100% - 32px); padding: 8px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface); color: var(--secondary); font-size: 12px; line-height: 16px; white-space: nowrap; pointer-events: none; }
     .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(160px,.9fr) minmax(184px,1fr) minmax(184px,1fr) minmax(216px,1.15fr); align-items: center; gap: 8px 24px; border-top: 1px solid var(--hairline); background: var(--surface); }
     .section { min-width: 0; }
     .section-snap { grid-column: 1; }
@@ -110,7 +109,6 @@
       .section-label { margin-bottom: 8px; }
       .selection-box { gap: 12px; }
       .metric { gap: 4px; }
-      .stage-help { right: 12px; bottom: 12px; max-width: calc(100% - 24px); }
     }
   </style>
 </head>
@@ -141,7 +139,6 @@
             <div class="drop-hint">PNG · JPG · WEBP</div>
           </div>
           <div class="canvas-wrap" id="canvasWrap"><canvas id="imageCanvas" aria-label="크롭 영역을 드래그하여 선택하세요"></canvas></div>
-          <div class="stage-help" id="stageHelp">프레임 안을 드래그해 이동 · 모서리와 변을 드래그해 조절</div>
         </div>
       </div>
       <aside class="side-card">
@@ -310,8 +307,9 @@
     const r=canvas.getBoundingClientRect();
     return {x:Math.max(0,Math.min(canvas.width,(ev.clientX-r.left)*canvas.width/r.width)),y:Math.max(0,Math.min(canvas.height,(ev.clientY-r.top)*canvas.height/r.height))};
   }
-  function getHandle(p,s) {
-    const radius=16/state.scale;
+  function getHandle(p,s,pointerType='mouse') {
+    const targetRadius=pointerType==='touch'?28:pointerType==='pen'?22:16;
+    const radius=targetRadius/state.scale;
     const handles=[['nw',s.l,s.t],['ne',s.r,s.t],['sw',s.l,s.b],['se',s.r,s.b]];
     for(const [name,x,y] of handles) if(Math.hypot(p.x-x,p.y-y)<=radius)return name;
     const mx=(s.l+s.r)/2,my=(s.t+s.b)/2;
@@ -326,7 +324,7 @@
     if(!state.image)return;
     const p=pointerPoint(ev), s=state.selection;
     let type='create', handle=null;
-    if(s) { handle=getHandle(p,s); if(handle)type=handle==='move'?'move':'resize'; }
+    if(s) { handle=getHandle(p,s,ev.pointerType); if(handle)type=handle==='move'?'move':'resize'; }
     let start=p;
     if(type==='create') start=snapPoint(p.x,p.y);
     state.action={type,handle,start,original:s?{...s}:null};
@@ -336,7 +334,7 @@
   canvas.addEventListener('pointermove', ev => {
     if(!state.image)return;
     const p=pointerPoint(ev), s=state.selection, a=state.action;
-    if(!a) { const hit=s?getHandle(p,s):null;canvas.style.cursor=hit==='move'?'move':hit==='n'||hit==='s'?'ns-resize':hit==='e'||hit==='w'?'ew-resize':hit==='ne'||hit==='sw'?'nesw-resize':hit?'nwse-resize':'crosshair'; return; }
+    if(!a) { const hit=s?getHandle(p,s,ev.pointerType):null;canvas.style.cursor=hit==='move'?'move':hit==='n'||hit==='s'?'ns-resize':hit==='e'||hit==='w'?'ew-resize':hit==='ne'||hit==='sw'?'nesw-resize':hit?'nwse-resize':'crosshair'; return; }
     const q=snapPoint(p.x,p.y);
     if(a.type==='create') setSelection({l:Math.min(a.start.x,q.x),t:Math.min(a.start.y,q.y),r:Math.max(a.start.x,q.x),b:Math.max(a.start.y,q.y)});
     else if(a.type==='move' && a.original) {
@@ -363,7 +361,7 @@
       state.image=img;state.name=file.name;state.selection=null;
       canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
       state.selection={l:0,t:0,r:canvas.width,b:canvas.height};
-      empty.style.display='none';wrap.style.display='block';$('stageHelp').style.display='block';
+      empty.style.display='none';wrap.style.display='block';
       $('topFileName').textContent=file.name;
       renderCanvas();detectEdges();updateSelectionInfo();
     };

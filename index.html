@@ -169,8 +169,9 @@
   const scanCanvas = document.createElement('canvas');
   const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
   const stage = $('stage'), wrap = $('canvasWrap'), empty = $('emptyState');
-  const state = { image: null, name: '', selection: null, edgesX: [], edgesY: [], scale: 1, action: null, edgeData: null };
+  const state = { image: null, name: '', selection: null, edgesX: [], edgesY: [], scale: 1, action: null };
   const fileInput = $('fileInput');
+  let edgeDetectionTimer = null;
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
 
   function setStatus(text, kind='') {
@@ -214,7 +215,7 @@
       for(let i=1;i<=2;i++){const gx=s.l+sw*i/3,gy=s.t+sh*i/3;ctx.moveTo(gx,s.t);ctx.lineTo(gx,s.b);ctx.moveTo(s.l,gy);ctx.lineTo(s.r,gy);}
       ctx.stroke();
       ctx.strokeStyle='#f5f6f3';ctx.lineWidth=Math.max(1.2,u*1.35);ctx.setLineDash([]);ctx.strokeRect(s.l,s.t,sw,sh);
-      const aligned=(position,lines)=>lines.some(edge=>edge.score>=.30&&Math.abs(edge.p-position)<=1);
+      const aligned=(position,lines)=>lines.some(edge=>Math.abs(edge.p-position)<=1);
       ctx.strokeStyle='#70c8e8';ctx.lineWidth=Math.max(2,u*2.5);ctx.lineCap='square';ctx.beginPath();
       const mark=Math.min(12*u,sw/10,sh/10);
       if(aligned(s.l,state.edgesX)){const y=s.t+sh*.28;ctx.moveTo(s.l,y-mark/2);ctx.lineTo(s.l,y+mark/2);}
@@ -274,7 +275,7 @@
     function pickPeaks(scores, coverageAt, minimumCoverage, separation) {
       const candidates=[];
       for(let i=2;i<scores.length-2;i++) {
-        if(coverageAt[i]<minimumCoverage || scores[i]<.16) continue;
+        if(coverageAt[i]<minimumCoverage) continue;
         let peak=true;
         for(let d=1;d<=3;d++) if(scores[i-d]>scores[i] || scores[i+d]>scores[i]) { peak=false;break; }
         if(peak) candidates.push({p:i,score:scores[i]});
@@ -286,21 +287,22 @@
     }
     state.edgesX=scanVertical(); state.edgesY=scanHorizontal();
     $('edgeMeta').textContent=`경계 ${state.edgesX.length+state.edgesY.length}개 감지`;
-    const strongX=state.edgesX.filter(e=>e.score>=.38).length, strongY=state.edgesY.filter(e=>e.score>=.38).length;
-    state.edgeData={strongX,strongY};
-    setStatus(`세로 ${strongX}개 · 가로 ${strongY}개 경계`, 'ready');
+    setStatus(`세로 ${state.edgesX.length}개 · 가로 ${state.edgesY.length}개 경계`, 'ready');
     draw();
   }
   function nearest(value, lines) {
-    if (!state.edgeData || !lines.length) return value;
+    if (!lines.length) return value;
     const max=Number($('snapRange').value);
     let best=null, dist=Infinity;
     for(const e of lines) {
-      if(e.score<.30) continue;
       const d=Math.abs(e.p-value);
       if(d<=max && d<dist) { best=e.p; dist=d; }
     }
     return best === null ? value : best;
+  }
+  function scheduleEdgeDetection() {
+    clearTimeout(edgeDetectionTimer);
+    edgeDetectionTimer=setTimeout(()=>{edgeDetectionTimer=null;detectEdges();},250);
   }
   function snapPoint(x,y) { if (!$('snapToggle').checked) return {x,y};return {x:nearest(x,state.edgesX),y:nearest(y,state.edgesY)}; }
   function pointerPoint(ev) {
@@ -380,8 +382,8 @@
   $('downloadButton').addEventListener('click',downloadCrop);
   $('clearButton').addEventListener('click',()=>{if(state.image)setSelection({l:0,t:0,r:canvas.width,b:canvas.height});});
   $('snapRange').addEventListener('input',e=>$('snapRangeValue').textContent=`${e.target.value} px`);
-  $('lineThreshold').addEventListener('input',e=>{$('lineThresholdValue').textContent=`${e.target.value}%`;});
-  $('lineThreshold').addEventListener('change',()=>{detectEdges();});
+  $('lineThreshold').addEventListener('input',e=>{$('lineThresholdValue').textContent=`${e.target.value}%`;scheduleEdgeDetection();});
+  $('lineThreshold').addEventListener('change',()=>{clearTimeout(edgeDetectionTimer);edgeDetectionTimer=null;detectEdges();});
   window.addEventListener('resize',renderCanvas);
   stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drag-over');});
   stage.addEventListener('dragleave',e=>{if(!stage.contains(e.relatedTarget))stage.classList.remove('drag-over');});

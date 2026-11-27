@@ -59,6 +59,14 @@
     .drop-hint { margin-top: 12px; color: var(--muted); font-size: 12px; }
     .canvas-wrap { position: relative; display: none; line-height: 0; touch-action: none; }
     #imageCanvas { display: block; max-width: none; cursor: crosshair; touch-action: none; }
+    .view-controls { position: absolute; z-index: 2; top: 14px; right: 14px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(25,25,27,.94); box-shadow: 0 4px 18px rgba(0,0,0,.22); }
+    .view-controls[hidden] { display: none; }
+    .view-button { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--secondary); }
+    .view-button:hover,.view-button.active { border-color: var(--hairline); background: var(--raised); color: var(--text); }
+    .view-button.active { color: var(--accent); }
+    .view-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .zoom-value { min-width: 46px; color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+    .fit-button { width: auto; padding: 0 9px; font-size: 12px; }
     .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(132px,.8fr) minmax(132px,.85fr) minmax(144px,.9fr) minmax(144px,.9fr) minmax(190px,1.1fr); align-items: center; gap: 8px 20px; border-top: 1px solid var(--hairline); background: var(--surface); }
     .section { min-width: 0; }
     .section-snap { grid-column: 1; }
@@ -111,6 +119,10 @@
       .section-label { margin-bottom: 8px; }
       .selection-box { gap: 12px; }
       .metric { gap: 4px; }
+      .view-controls { top: 8px; right: 8px; gap: 2px; padding: 3px; }
+      .view-button { width: 32px; height: 32px; flex-basis: 32px; }
+      .zoom-value { min-width: 42px; }
+      .fit-button { padding: 0 7px; font-size: 11px; }
     }
   </style>
 </head>
@@ -141,6 +153,13 @@
             <div class="drop-hint">PNG · JPG · WEBP</div>
           </div>
           <div class="canvas-wrap" id="canvasWrap"><canvas id="imageCanvas" aria-label="크롭 영역을 드래그하여 선택하세요"></canvas></div>
+          <div class="view-controls" id="viewControls" hidden role="group" aria-label="이미지 보기 조절">
+            <button class="view-button" id="zoomOut" type="button" aria-label="축소" title="축소"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+            <span class="zoom-value" id="zoomValue">100%</span>
+            <button class="view-button" id="zoomIn" type="button" aria-label="확대" title="확대"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="view-button fit-button" id="fitView" type="button" title="이미지 맞춤">맞춤</button>
+            <button class="view-button" id="panToggle" type="button" aria-label="이미지 이동 모드" aria-pressed="false" title="이미지 이동 모드"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M22 12l-3-3M22 12l-3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3"/></svg></button>
+          </div>
         </div>
       </div>
       <aside class="side-card">
@@ -175,7 +194,7 @@
   const scanCanvas = document.createElement('canvas');
   const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
   const stage = $('stage'), wrap = $('canvasWrap'), empty = $('emptyState');
-  const state = { image: null, name: '', selection: null, edgesX: [], edgesY: [], scale: 1, action: null };
+  const state = { image: null, name: '', selection: null, edgesX: [], edgesY: [], scale: 1, fitScale: 1, zoom: 1, panX: 0, panY: 0, panMode: false, action: null };
   const fileInput = $('fileInput');
   let edgeDetectionTimer = null;
   const fmt = n => Math.round(n).toLocaleString('ko-KR');
@@ -198,16 +217,47 @@
     $('downloadButton').disabled = !s;
     $('clearButton').disabled = !state.image;
   }
+  function clampPan() {
+    if (!state.image) return;
+    const rect=stage.getBoundingClientRect();
+    const maxX=Math.max(0,(state.image.naturalWidth*state.scale-rect.width)/2);
+    const maxY=Math.max(0,(state.image.naturalHeight*state.scale-rect.height)/2);
+    state.panX=Math.max(-maxX,Math.min(maxX,state.panX));
+    state.panY=Math.max(-maxY,Math.min(maxY,state.panY));
+  }
+  function updateCanvasPosition() {
+    clampPan();
+    wrap.style.transform=`translate(${state.panX}px,${state.panY}px)`;
+  }
   function renderCanvas() {
     if (!state.image) return;
     const w = state.image.naturalWidth, h = state.image.naturalHeight;
     const rect = stage.getBoundingClientRect();
     const maxW = Math.max(160, rect.width - 32), maxH = Math.max(160, rect.height - 32);
-    state.scale = Math.min(maxW / w, maxH / h, 1);
+    state.fitScale = Math.min(maxW / w, maxH / h, 1);
+    state.scale = state.fitScale * state.zoom;
     wrap.style.width = `${w * state.scale}px`; wrap.style.height = `${h * state.scale}px`;
     canvas.style.width = `${w * state.scale}px`; canvas.style.height = `${h * state.scale}px`;
+    updateCanvasPosition();
+    $('zoomValue').textContent=`${Math.round(state.scale*100)}%`;
     draw();
   }
+  function setZoom(nextZoom, clientX=null, clientY=null) {
+    if (!state.image) return;
+    const next=Math.max(.5,Math.min(8,nextZoom));
+    if (next===state.zoom) return;
+    const nextScale=state.fitScale*next, ratio=nextScale/state.scale;
+    if (clientX===null || clientY===null) {
+      state.panX*=ratio; state.panY*=ratio;
+    } else {
+      const rect=stage.getBoundingClientRect(), cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
+      const imageX=(clientX-cx-state.panX)/state.scale, imageY=(clientY-cy-state.panY)/state.scale;
+      state.panX=clientX-cx-imageX*nextScale; state.panY=clientY-cy-imageY*nextScale;
+    }
+    state.zoom=next;
+    renderCanvas();
+  }
+  function fitImage() { state.zoom=1;state.panX=0;state.panY=0;renderCanvas(); }
   function draw() {
     if (!state.image) return;
     const w = canvas.width, h = canvas.height;
@@ -330,6 +380,10 @@
   }
   canvas.addEventListener('pointerdown', ev => {
     if(!state.image)return;
+    if(state.panMode) {
+      state.action={type:'pan',startX:ev.clientX,startY:ev.clientY,originPanX:state.panX,originPanY:state.panY};
+      canvas.setPointerCapture(ev.pointerId);canvas.style.cursor='grabbing';ev.preventDefault();return;
+    }
     const p=pointerPoint(ev), s=state.selection;
     let type='create', handle=null;
     if(s) { handle=getHandle(p,s,ev.pointerType); if(handle)type=handle==='move'?'move':'resize'; }
@@ -341,8 +395,13 @@
   });
   canvas.addEventListener('pointermove', ev => {
     if(!state.image)return;
-    const p=pointerPoint(ev), s=state.selection, a=state.action;
-    if(!a) { const hit=s?getHandle(p,s,ev.pointerType):null;canvas.style.cursor=hit==='move'?'move':hit==='n'||hit==='s'?'ns-resize':hit==='e'||hit==='w'?'ew-resize':hit==='ne'||hit==='sw'?'nesw-resize':hit?'nwse-resize':'crosshair'; return; }
+    const a=state.action;
+    if(a?.type==='pan') {
+      state.panX=a.originPanX+ev.clientX-a.startX;state.panY=a.originPanY+ev.clientY-a.startY;
+      updateCanvasPosition();return;
+    }
+    const p=pointerPoint(ev), s=state.selection;
+    if(!a) { if(state.panMode){canvas.style.cursor='grab';return;}const hit=s?getHandle(p,s,ev.pointerType):null;canvas.style.cursor=hit==='move'?'move':hit==='n'||hit==='s'?'ns-resize':hit==='e'||hit==='w'?'ew-resize':hit==='ne'||hit==='sw'?'nesw-resize':hit?'nwse-resize':'crosshair'; return; }
     const q=snapPoint(p.x,p.y);
     if(a.type==='create') setSelection({l:Math.min(a.start.x,q.x),t:Math.min(a.start.y,q.y),r:Math.max(a.start.x,q.x),b:Math.max(a.start.y,q.y)});
     else if(a.type==='move' && a.original) {
@@ -358,7 +417,7 @@
       setSelection(r);
     }
   });
-  function endPointer(ev) { if(state.action){ state.action=null; try{canvas.releasePointerCapture(ev.pointerId);}catch{} } }
+  function endPointer(ev) { if(state.action){ state.action=null;canvas.style.cursor=state.panMode?'grab':'crosshair';try{canvas.releasePointerCapture(ev.pointerId);}catch{} } }
   canvas.addEventListener('pointerup',endPointer); canvas.addEventListener('pointercancel',endPointer);
 
   function loadFile(file) {
@@ -367,6 +426,7 @@
     img.onload=()=>{
       if(state.image && state.image.src.startsWith('blob:')) URL.revokeObjectURL(state.image.src);
       state.image=img;state.name=file.name;state.selection=null;
+      state.zoom=1;state.panX=0;state.panY=0;state.panMode=false;$('viewControls').hidden=false;$('panToggle').classList.remove('active');$('panToggle').setAttribute('aria-pressed','false');
       canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
       state.selection={l:0,t:0,r:canvas.width,b:canvas.height};
       empty.style.display='none';wrap.style.display='block';
@@ -387,12 +447,17 @@
   fileInput.addEventListener('change',e=>{loadFile(e.target.files[0]);fileInput.value='';});
   $('downloadButton').addEventListener('click',downloadCrop);
   $('clearButton').addEventListener('click',()=>{if(state.image)setSelection({l:0,t:0,r:canvas.width,b:canvas.height});});
+  $('zoomIn').addEventListener('click',()=>setZoom(state.zoom*1.25));
+  $('zoomOut').addEventListener('click',()=>setZoom(state.zoom/1.25));
+  $('fitView').addEventListener('click',fitImage);
+  $('panToggle').addEventListener('click',()=>{state.panMode=!state.panMode;$('panToggle').classList.toggle('active',state.panMode);$('panToggle').setAttribute('aria-pressed',String(state.panMode));canvas.style.cursor=state.panMode?'grab':'crosshair';});
   $('snapRange').addEventListener('input',e=>$('snapRangeValue').textContent=`${e.target.value} px`);
   $('lineThreshold').addEventListener('input',e=>{$('lineThresholdValue').textContent=`${e.target.value}%`;scheduleEdgeDetection();});
   $('lineThreshold').addEventListener('change',()=>{clearTimeout(edgeDetectionTimer);edgeDetectionTimer=null;detectEdges();});
   $('edgeSensitivity').addEventListener('input',e=>{$('edgeSensitivityValue').textContent=`${e.target.value}%`;scheduleEdgeDetection();});
   $('edgeSensitivity').addEventListener('change',()=>{clearTimeout(edgeDetectionTimer);edgeDetectionTimer=null;detectEdges();});
   window.addEventListener('resize',renderCanvas);
+  stage.addEventListener('wheel',ev=>{if(!state.image||!canvas.contains(ev.target))return;ev.preventDefault();setZoom(state.zoom*(ev.deltaY<0?1.12:1/1.12),ev.clientX,ev.clientY);},{passive:false});
   stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drag-over');});
   stage.addEventListener('dragleave',e=>{if(!stage.contains(e.relatedTarget))stage.classList.remove('drag-over');});
   stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drag-over');loadFile(e.dataTransfer.files[0]);});

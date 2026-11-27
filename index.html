@@ -59,12 +59,13 @@
     .drop-hint { margin-top: 12px; color: var(--muted); font-size: 12px; }
     .canvas-wrap { position: relative; display: none; line-height: 0; touch-action: none; }
     #imageCanvas { display: block; max-width: none; cursor: crosshair; touch-action: none; }
-    .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(160px,.9fr) minmax(184px,1fr) minmax(184px,1fr) minmax(216px,1.15fr); align-items: center; gap: 8px 24px; border-top: 1px solid var(--hairline); background: var(--surface); }
+    .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(132px,.8fr) minmax(132px,.85fr) minmax(144px,.9fr) minmax(144px,.9fr) minmax(190px,1.1fr); align-items: center; gap: 8px 20px; border-top: 1px solid var(--hairline); background: var(--surface); }
     .section { min-width: 0; }
     .section-snap { grid-column: 1; }
     .section-distance { grid-column: 2; }
     .section-threshold { grid-column: 3; }
-    .section-selection { grid-column: 4; }
+    .section-sensitivity { grid-column: 4; }
+    .section-selection { grid-column: 5; }
     .toggle-row { display: flex; align-items: center; gap: 12px; }
     .toggle-copy b { display: block; color: var(--text); font-size: 13px; font-weight: 500; }
     .toggle-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 16px; }
@@ -88,11 +89,12 @@
     .footnote,.side-title { display: none; }
     #fileInput { display: none; }
     @media(max-width: 960px) {
-      .side-card { min-height: 176px; padding: 16px 20px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: 1fr 1fr; gap: 16px 24px; }
+      .side-card { min-height: 220px; padding: 16px 20px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto auto auto; align-content: center; gap: 14px 24px; }
       .section-snap { grid-column: 1; grid-row: 1; }
       .section-distance { grid-column: 2; grid-row: 1; }
       .section-threshold { grid-column: 1; grid-row: 2; }
-      .section-selection { grid-column: 2; grid-row: 2; }
+      .section-sensitivity { grid-column: 2; grid-row: 2; }
+      .section-selection { grid-column: 1 / -1; grid-row: 3; }
       .toggle-copy span { display: none; }
     }
     @media(max-width: 560px) {
@@ -105,7 +107,7 @@
       .top-actions #downloadButton { gap: 8px; padding: 0 12px; }
       .top-actions #downloadButton .button-label { font-size: 12px; }
       .intro { padding: 0 16px; }
-      .side-card { min-height: 192px; padding: 16px 12px; gap: 12px; }
+      .side-card { min-height: 228px; padding: 14px 12px; gap: 10px 16px; }
       .section-label { margin-bottom: 8px; }
       .selection-box { gap: 12px; }
       .metric { gap: 4px; }
@@ -152,6 +154,10 @@
         <div class="section section-threshold">
           <div class="section-label"><label for="lineThreshold">경계 최소 길이</label><span class="range-value" id="lineThresholdValue">25%</span></div>
           <div class="range-row"><input id="lineThreshold" type="range" min="10" max="70" value="25"></div>
+        </div>
+        <div class="section section-sensitivity">
+          <div class="section-label"><label for="edgeSensitivity">경계 감도</label><span class="range-value" id="edgeSensitivityValue">63%</span></div>
+          <div class="range-row"><input id="edgeSensitivity" type="range" min="0" max="100" value="63" aria-label="경계 감도"></div>
         </div>
         <div class="section section-selection">
           <div class="section-label">크롭 영역</div>
@@ -244,7 +250,7 @@
     scanCtx.drawImage(state.image,0,0,w,h);
     const data = scanCtx.getImageData(0,0,w,h).data;
     const minimumCoverage = Number($('lineThreshold').value) / 100;
-    const lineDiff = 52;
+    const lineDiff = Math.round(112 - Number($('edgeSensitivity').value) * .96);
     const sampleY = Math.max(1, Math.floor(h/900)), sampleX = Math.max(1, Math.floor(w/900));
     function rgbDiff(i,j) { const dr=data[i]-data[j], dg=data[i+1]-data[j+1], db=data[i+2]-data[j+2]; return Math.sqrt(dr*dr+dg*dg+db*db); }
     function scanVertical() {
@@ -384,6 +390,8 @@
   $('snapRange').addEventListener('input',e=>$('snapRangeValue').textContent=`${e.target.value} px`);
   $('lineThreshold').addEventListener('input',e=>{$('lineThresholdValue').textContent=`${e.target.value}%`;scheduleEdgeDetection();});
   $('lineThreshold').addEventListener('change',()=>{clearTimeout(edgeDetectionTimer);edgeDetectionTimer=null;detectEdges();});
+  $('edgeSensitivity').addEventListener('input',e=>{$('edgeSensitivityValue').textContent=`${e.target.value}%`;scheduleEdgeDetection();});
+  $('edgeSensitivity').addEventListener('change',()=>{clearTimeout(edgeDetectionTimer);edgeDetectionTimer=null;detectEdges();});
   window.addEventListener('resize',renderCanvas);
   stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drag-over');});
   stage.addEventListener('dragleave',e=>{if(!stage.contains(e.relatedTarget))stage.classList.remove('drag-over');});

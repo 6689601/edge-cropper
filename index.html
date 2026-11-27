@@ -59,14 +59,14 @@
     .drop-hint { margin-top: 12px; color: var(--muted); font-size: 12px; }
     .canvas-wrap { position: relative; display: none; line-height: 0; touch-action: none; }
     #imageCanvas { display: block; max-width: none; cursor: crosshair; touch-action: none; }
-    .view-controls { position: absolute; z-index: 2; top: 14px; right: 14px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(25,25,27,.94); box-shadow: 0 4px 18px rgba(0,0,0,.22); }
+    .view-controls { position: absolute; z-index: 2; top: 50%; right: 14px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(25,25,27,.94); box-shadow: 0 4px 18px rgba(0,0,0,.22); transform: translateY(-50%); }
     .view-controls[hidden] { display: none; }
     .view-button { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--secondary); }
     .view-button:hover,.view-button.active { border-color: var(--hairline); background: var(--raised); color: var(--text); }
     .view-button.active { color: var(--accent); }
     .view-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .zoom-value { min-width: 46px; color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
-    .fit-button { width: auto; padding: 0 9px; font-size: 12px; }
+    .fit-button { width: 42px; padding: 0; font-size: 12px; }
     .side-card { min-height: 128px; padding: 16px 24px; display: grid; grid-template-columns: minmax(132px,.8fr) minmax(132px,.85fr) minmax(144px,.9fr) minmax(144px,.9fr) minmax(190px,1.1fr); align-items: center; gap: 8px 20px; border-top: 1px solid var(--hairline); background: var(--surface); }
     .section { min-width: 0; }
     .section-snap { grid-column: 1; }
@@ -119,10 +119,10 @@
       .section-label { margin-bottom: 8px; }
       .selection-box { gap: 12px; }
       .metric { gap: 4px; }
-      .view-controls { top: 8px; right: 8px; gap: 2px; padding: 3px; }
+      .view-controls { top: 50%; right: 8px; gap: 1px; padding: 3px; }
       .view-button { width: 32px; height: 32px; flex-basis: 32px; }
-      .zoom-value { min-width: 42px; }
-      .fit-button { padding: 0 7px; font-size: 11px; }
+      .zoom-value { min-width: 36px; font-size: 11px; }
+      .fit-button { width: 36px; font-size: 10px; }
     }
   </style>
 </head>
@@ -154,9 +154,9 @@
           </div>
           <div class="canvas-wrap" id="canvasWrap"><canvas id="imageCanvas" aria-label="크롭 영역을 드래그하여 선택하세요"></canvas></div>
           <div class="view-controls" id="viewControls" hidden role="group" aria-label="이미지 보기 조절">
-            <button class="view-button" id="zoomOut" type="button" aria-label="축소" title="축소"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
-            <span class="zoom-value" id="zoomValue">100%</span>
             <button class="view-button" id="zoomIn" type="button" aria-label="확대" title="확대"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <span class="zoom-value" id="zoomValue">100%</span>
+            <button class="view-button" id="zoomOut" type="button" aria-label="축소" title="축소"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
             <button class="view-button fit-button" id="fitView" type="button" title="이미지 맞춤">맞춤</button>
             <button class="view-button" id="panToggle" type="button" aria-label="이미지 이동 모드" aria-pressed="false" title="이미지 이동 모드"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M22 12l-3-3M22 12l-3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3"/></svg></button>
           </div>
